@@ -59,4 +59,5 @@ type SearchConfigParam struct {
 	AppName  string `param:"appName"`
 	PageNo   int    `param:"pageNo"`
 	PageSize int    `param:"pageSize"`
+	IsV3     bool
 }

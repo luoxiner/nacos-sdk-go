@@ -75,6 +75,9 @@ func (cp *ConfigProxy) injectCommHeader(param map[string]string) {
 }
 
 func (cp *ConfigProxy) searchConfigProxy(param vo.SearchConfigParam, tenant, accessKey, secretKey string) (*model.ConfigPage, error) {
+	if param.IsV3 {
+		return cp.searchConfigProxyV3(param, tenant, accessKey, secretKey)
+	}
 	params := util.TransformObject2Param(param)
 	if len(tenant) > 0 {
 		params["tenant"] = tenant
@@ -98,6 +101,41 @@ func (cp *ConfigProxy) searchConfigProxy(param vo.SearchConfigParam, tenant, acc
 		return nil, err
 	}
 	return &configPage, nil
+}
+
+func (cp *ConfigProxy) searchConfigProxyV3(param vo.SearchConfigParam, tenant, accessKey, secretKey string) (*model.ConfigPage, error) {
+	params := util.TransformObject2Param(param)
+	if len(tenant) > 0 {
+		params["namespaceId"] = tenant
+	}
+
+	if _, ok := params["group"]; !ok {
+		params["groupName"] = ""
+	} else {
+		params["groupName"] = params["group"]
+	}
+
+	if _, ok := params["dataId"]; !ok {
+		params["dataId"] = ""
+	}
+	var headers = map[string]string{}
+	headers["accessKey"] = accessKey
+	headers["secretKey"] = secretKey
+	result, err := cp.nacosServer.ReqConfigApi("/v3/admin/cs/config/list", params, headers, http.MethodGet, cp.clientConfig.TimeoutMs)
+	if err != nil {
+		return nil, err
+	}
+	type AdminConfigPage struct {
+		Code       int32            `json:"code"`
+		Message    string           `json:"message"`
+		ConfigPage model.ConfigPage `json:"data"`
+	}
+	var adminConfigPage AdminConfigPage
+	err = json.Unmarshal([]byte(result), &adminConfigPage)
+	if err != nil {
+		return nil, err
+	}
+	return &adminConfigPage.ConfigPage, nil
 }
 
 func (cp *ConfigProxy) queryConfig(dataId, group, tenant string, timeout uint64, notify bool, client *ConfigClient) (*rpc_response.ConfigQueryResponse, error) {
