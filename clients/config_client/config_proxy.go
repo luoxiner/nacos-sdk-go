@@ -89,14 +89,26 @@ func (cp *ConfigProxy) searchConfigProxy(param vo.SearchConfigParam, tenant, acc
 		params["dataId"] = ""
 	}
 	var headers = map[string]string{}
-	headers["accessKey"] = accessKey
-	headers["secretKey"] = secretKey
+	var version = "v2"
 	result, err := cp.nacosServer.ReqConfigApi(constant.CONFIG_PATH, params, headers, http.MethodGet, cp.clientConfig.TimeoutMs)
 	if err != nil {
-		return nil, err
+		if len(tenant) > 0 {
+			params["namespaceId"] = params["tenant"]
+		}
+		result, err = cp.nacosServer.ReqConfigApi("/v3/admin/cs/config/list", params, headers, http.MethodGet, cp.clientConfig.TimeoutMs)
+		if err != nil {
+			return nil, err
+		}
+		version = "v3"
 	}
 	var configPage model.ConfigPage
-	err = json.Unmarshal([]byte(result), &configPage)
+	if version == "v2" {
+		err = json.Unmarshal([]byte(result), &configPage)
+	} else {
+		var configPageResult model.ConfigPageResult
+		err = json.Unmarshal([]byte(result), &configPageResult)
+		configPage = configPageResult.Data
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -211,6 +223,10 @@ func (cp *ConfigProxy) createRpcClient(ctx context.Context, taskId string, clien
 			// TODO fix the group/dataId empty problem
 			return rpc_request.NewConfigChangeNotifyRequest("", "", "")
 		}, &ConfigChangeNotifyRequestHandler{client: client})
+
+		configListener := NewConfigConnectionEventListener(client, taskId)
+		rpcClient.RegisterConnectionListener(configListener)
+
 		rpcClient.Tenant = cp.clientConfig.NamespaceId
 		rpcClient.Start()
 	}

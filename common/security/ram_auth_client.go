@@ -70,7 +70,6 @@ func (rac *RamAuthClient) Login() (bool, error) {
 			break
 		}
 	}
-
 	if rac.matchedProvider == nil {
 		return false, nil
 	}
